@@ -1,0 +1,9 @@
+{
+  "port": "COM4",
+  "configuration": "",
+  "output": "build",
+  "board": "",
+  "programmer": "",
+  "useProgrammer": false,
+  "configurationRequired": false
+}
