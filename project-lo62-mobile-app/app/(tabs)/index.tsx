@@ -149,19 +149,10 @@ export default function HomePage() {
         </TouchableOpacity>
       </View>
 
-
       <View style={styles.engineOffContainer}>
         <TouchableButton color="#FF00FF" text="Engine Off" icon="close" onPress={() => setSliderValue(0)} />
-
-        <TouchableOpacity style={styles.engineOffButton} onPress={() => setSliderValue(0)}>
-          <MaterialIcons name="close" size={24} color="#FF0000" />
-          <Text style={styles.centeredContentText}>Calib. ESC</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.engineOffButton} onPress={() => setSliderValue(0)}>
-          <MaterialIcons name="close" size={24} color="#FF0000" />
-          <Text style={styles.centeredContentText}>Overdrive</Text>
-        </TouchableOpacity>
+        <TouchableButton color="#FFFF00" text="Calib. ESC" icon="replay" onPress={() => setSliderValue(0)} />
+        <TouchableButton color="orange" text="Overdrive" icon="close" onPress={() => setSliderValue(0)} />
       </View >
     </ScrollView >
   );
