@@ -4,6 +4,6 @@ set -e
 
 bundle exec jekyll build
 bundle exec htmlproofer ./_site --check-html --check-sri
-bundle exec rubocop -D --config .rubocop.yml
-bundle exec script/validate-html
-gem build jekyll-theme-tactile.gemspec
+bundle exec rubocop -D --config docs/.rubocop.yml
+bundle exec docs/script/validate-html
+gem build docs/jekyll-theme-tactile.gemspec
