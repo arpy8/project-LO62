@@ -12,7 +12,11 @@ jobs:
         with:
           ruby-version: 2.7
           bundler-cache: true
+      - name: Give execute permission to bootstrap script
+        run: chmod +x docs/script/bootstrap
       - name: build
         run: docs/script/bootstrap
+      - name: Give execute permission to cibuild script
+        run: chmod +x docs/script/cibuild
       - name: test
         run: docs/script/cibuild
