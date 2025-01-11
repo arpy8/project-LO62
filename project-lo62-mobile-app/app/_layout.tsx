@@ -28,6 +28,8 @@ export default function RootLayout() {
     SpaceMono: require('@/assets/fonts/SpaceMono-Regular.ttf'),
     LeJourSerif: require('@/assets/fonts/LeJourSerif.ttf'),
     RockSaltRegular: require('@/assets/fonts/RockSalt-Regular.ttf'),
+    PixelifySans: require('@/assets/fonts/PixelifySans-VariableFont_wght.ttf'),
+    Comfortaa: require('@/assets/fonts/Comfortaa-VariableFont_wght.ttf'),
     ...FontAwesome.font,
   });
 

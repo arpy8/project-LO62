@@ -23,7 +23,10 @@
       },
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT"
       ],
       "package": "com.arpy8.lo62controllerapp"
     },
@@ -34,35 +37,39 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font",
       [
-        "expo-camera",
+        "expo-font",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera",
-          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone",
-          "recordAudioAndroid": true
+          "fonts": [
+            "assets/fonts/LeJourSerif.ttf",
+            "assets/fonts/RockSalt-Regular.ttf",
+            "assets/fonts/PixelifySans-VariableFont_wght.ttf",
+            "assets/fonts/Comfortaa-VariableFont_wght.ttf"
+          ]
         }
       ],
       [
-        "expo-audio",
+        "react-native-ble-plx",
         {
-          "microphonePermission": "Allow $(PRODUCT_NAME) to access your volume"
+          "isBackgroundEnabled": true,
+          "modes": [
+            "peripheral",
+            "central"
+          ],
+          "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to connect to bluetooth devices"
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true
     },
-    "permissions": [
-      "CAMERA",
-      "MEDIA_LIBRARY"
-    ],
+    "permissions": [],
     "extra": {
       "router": {
         "origin": false
       },
       "eas": {
-        "projectId": "57520902-19df-447c-940e-33bb320bd176"
+        "projectId": "53746ec6-4e59-4662-bc55-443145f5531a"
       }
     }
   }
