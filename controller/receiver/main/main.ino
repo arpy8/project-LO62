@@ -18,11 +18,13 @@ class MyServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer* pServer) {
     deviceConnected = true;
     Serial.println("Device connected");
+    digitalWrite(LED_BUILTIN, HIGH);
   };
 
   void onDisconnect(BLEServer* pServer) {
     deviceConnected = false;
     Serial.println("Device disconnected");
+    digitalWrite(LED_BUILTIN, LOW);
     BLEDevice::startAdvertising();
   }
 };
@@ -42,18 +44,21 @@ private:
     int len = value.length();
 
     // 0x65: caliberate esc
+    // 0x66: disconnect bt
     // default: handle speed
 
     if (len == 1) {
-      Serial.println(data[0]);
-
       switch (data[0]) {
         case 0x65:
           recalibrateMotor();
           break;
+        case 0x66:
+          Serial.println("Disconnecting Bluetooth...");
+          pServer->disconnect(pServer->getConnId());
+          digitalWrite(LED_BUILTIN, LOW);
+          break;
         default:
-          int receivedSpeed = data[0];
-          setMotorSpeed(receivedSpeed);
+          setMotorSpeed(data[0]);
           break;
       }
     }
@@ -102,8 +107,5 @@ void loop() {
     if (currentTime - lastProcessTime >= PROCESS_INTERVAL) {
       lastProcessTime = currentTime;
     }
-  } else {
-    BLEDevice::startAdvertising();
-    Serial.println("Waiting for connection...");
   }
 }

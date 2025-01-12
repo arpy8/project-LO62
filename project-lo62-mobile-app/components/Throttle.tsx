@@ -6,7 +6,6 @@ import { Image } from 'react-native';
 export default function Throttle(props) {
     const handleChange = (value) => {
         props.setValue(value);
-        console.log('Current value:', value);
     };
 
     return (

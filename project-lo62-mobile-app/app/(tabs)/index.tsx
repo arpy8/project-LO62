@@ -1,29 +1,90 @@
 import { Buffer } from 'buffer';
-import { View } from '@/components/Themed';
-import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, ScrollView } from 'react-native';
-import Throttle from '@/components/Throttle';
-import Header from '@/components/Header';
-import { TouchableButton, GearView } from '@/components/IndexComponents';
-import { EmergencyButton } from '@/components/EmergencyButton';
+import { useCallback } from 'react';
 import { BleManager } from 'react-native-ble-plx';
-import { useVibration } from '@/components/haptics';
-import { sendData, sendCommand } from '@/components/BTutils';
+import { StyleSheet, ScrollView } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+
+import Header from '@/components/Header';
+import { View } from '@/components/Themed';
+import Throttle from '@/components/Throttle';
 import { Snackbar } from '@/components/Snackbar';
+import { sendCommand } from '@/components/BTutils';
+import { useVibration } from '@/components/haptics';
+import { EmergencyButton } from '@/components/EmergencyButton';
+import { TouchableButton, GearView } from '@/components/IndexComponents';
 
 global.Buffer = Buffer;
 
+class SignalManager {
+  private lastValue: number | null = null;
+  private device: any;
+  private minInterval = 8;
+  private lastSendTime = 0;
+  private pendingValue: number | null = null;
+  private sendTimeout: NodeJS.Timeout | null = null;
+
+  constructor(device: any) {
+    this.device = device;
+  }
+
+  async send(value: number) {
+    this.pendingValue = value;
+
+    const now = Date.now();
+    const timeSinceLastSend = now - this.lastSendTime;
+
+    if (this.sendTimeout) {
+      clearTimeout(this.sendTimeout);
+      this.sendTimeout = null;
+    }
+
+    if (timeSinceLastSend < this.minInterval) {
+      this.sendTimeout = setTimeout(() => {
+        this.executeSignal();
+      }, this.minInterval - timeSinceLastSend);
+      return;
+    }
+
+    await this.executeSignal();
+  }
+
+  private async executeSignal() {
+    if (this.pendingValue === null || !this.device) return;
+
+    const valueToSend = this.pendingValue;
+    if (valueToSend === this.lastValue) return;
+
+    try {
+      sendCommand(this.device, valueToSend);
+      sendCommand(this.device, `0x${valueToSend.toString(16).toUpperCase().padStart(2, '0')}`);
+
+      this.lastValue = valueToSend;
+      this.lastSendTime = Date.now();
+    } catch (error) {
+      console.error('Signal send error:', error);
+    }
+
+    this.pendingValue = null;
+  }
+
+  setDevice(device: any) {
+    this.device = device;
+  }
+}
+
 export default function HomePage() {
   const [sliderValue, setSliderValue] = useState(0);
-  const [maxThrottle, setMaxThrottle] = useState(70);
+  const [maxThrottle, setMaxThrottle] = useState(60);
   const [engineOn, setEngineOn] = useState(false);
   const [overdriveOn, setOverdriveOn] = useState(false);
   const [gearValue, setGearValue] = useState<'N' | '1' | '2' | '3' | '4' | '5' | '6'>('N');
   const [currentAction, setCurrentAction] = useState<'accelerate' | 'decelerate' | null>(null);
   const timeoutsRef = useRef<number[]>([]);
+  const speedIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [manager] = useState(new BleManager());
   const [device, setDevice] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
+  const signalManager = useRef<SignalManager | null>(null);
   const [snackbar, setSnackbar] = useState({
     visible: false,
     message: '',
@@ -40,6 +101,28 @@ export default function HomePage() {
     { gear: '5', min: 61, max: 75, default: 68 },
     { gear: '6', min: 76, max: 100, default: 83 }
   ];
+
+  useEffect(() => {
+    if (device) {
+      if (!signalManager.current) {
+        signalManager.current = new SignalManager(device);
+      } else {
+        signalManager.current.setDevice(device);
+      }
+    }
+  }, [device]);
+
+  const showSnackbar = useCallback((message: string, type = 'success') => {
+    setSnackbar({
+      visible: true,
+      message,
+      type
+    });
+  }, []);
+
+  const hideSnackbar = useCallback(() => {
+    setSnackbar(prev => ({ ...prev, visible: false }));
+  }, []);
 
   useEffect(() => {
     setMaxThrottle(overdriveOn ? 100 : 60);
@@ -60,37 +143,75 @@ export default function HomePage() {
     }
   }, [sliderValue, engineOn]);
 
-  function handleSpeed(state: 'accelerate' | 'decelerate') {
-    if (!engineOn || currentAction === state) return;
+  useEffect(() => {
+    if (device && signalManager.current && engineOn && 0 <= sliderValue && sliderValue <= 100) {
+      signalManager.current.send(sliderValue);
+    }
+  }, [sliderValue, device, engineOn]);
 
-    timeoutsRef.current.forEach(clearTimeout);
-    timeoutsRef.current = [];
+  const handleSpeed = useCallback((state: 'accelerate' | 'decelerate') => {
+    if (!engineOn) return;
+    if (currentAction === state) return;
 
-    setCurrentAction(state);
-
-    function adjustSpeed(value: number) {
-      if ((state === 'accelerate' && value >= maxThrottle) || (state === 'decelerate' && value <= 0)) {
-        setCurrentAction(null);
-        return;
-      }
-
-      timeoutsRef.current.push(
-        setTimeout(() => {
-          setSliderValue((prevValue) => (state === 'accelerate' ? prevValue + 1 : prevValue - 1));
-          adjustSpeed(state === 'accelerate' ? value + 1 : value - 1);
-        }, 100) as unknown as number
-      );
+    if (speedIntervalRef.current) {
+      clearInterval(speedIntervalRef.current);
+      speedIntervalRef.current = null;
     }
 
-    adjustSpeed(sliderValue);
-  }
+    if (currentAction !== null && currentAction !== state) {
+      setCurrentAction(null);
+      return;
+    }
 
-  function handleEngineChange() {
+    setCurrentAction(state);
+    const speedInterval = 50;
+
+    speedIntervalRef.current = setInterval(() => {
+      setSliderValue(currentValue => {
+        const nextValue = state === 'accelerate'
+          ? Math.min(currentValue + 1, maxThrottle)
+          : Math.max(currentValue - 1, 0);
+
+        if ((state === 'accelerate' && nextValue >= maxThrottle) ||
+          (state === 'decelerate' && nextValue <= 0)) {
+          if (speedIntervalRef.current) {
+            clearInterval(speedIntervalRef.current);
+            speedIntervalRef.current = null;
+          }
+          setTimeout(() => setCurrentAction(null), 0);
+        }
+
+        return nextValue;
+      });
+    }, speedInterval);
+
+    return () => {
+      if (speedIntervalRef.current) {
+        clearInterval(speedIntervalRef.current);
+        speedIntervalRef.current = null;
+      }
+    };
+  }, [engineOn, currentAction, maxThrottle]);
+
+  const handleEngineChange = useCallback(() => {
+    if (engineOn) {
+      adjustSpeedSmoothly(0, 1000);
+      setMaxThrottle(60);
+      setOverdriveOn(false);
+      setGearValue('N');
+      setCurrentAction(null);
+
+      if (speedIntervalRef.current) {
+        clearInterval(speedIntervalRef.current);
+        speedIntervalRef.current = null;
+      }
+    }
+
+    showSnackbar(`System turned ${engineOn ? "off" : "on"}`, 'success');
     setEngineOn((prevValue) => !prevValue);
-    adjustSpeedSmoothly(0, 3000);
-  }
+  }, [engineOn, showSnackbar]);
 
-  function adjustSpeedSmoothly(targetValue: number, duration: number) {
+  const adjustSpeedSmoothly = useCallback((targetValue: number, duration: number) => {
     timeoutsRef.current.forEach(clearTimeout);
     timeoutsRef.current = [];
 
@@ -106,54 +227,43 @@ export default function HomePage() {
 
       timeoutsRef.current.push(timeout as unknown as number);
     }
-  }
-  function handleGear(state: '+' | '-') {
+  }, [sliderValue]);
+
+  const handleGear = useCallback((state: '+' | '-') => {
     if (!engineOn) return;
 
-    const gearMap = {
-      N: 0x04,
-      1: 0x05,
-      2: 0x06,
-      3: 0x07,
-      4: 0x08,
-      5: 0x09,
-      6: 0x10
-    };
+    const gearSequence = ['N', '1', '2', '3', '4', '5', '6'] as const;
+    const currentIndex = gearSequence.indexOf(gearValue);
 
-    let newGear: 'N' | '1' | '2' | '3' | '4' | '5' | '6' = gearValue;
-    let gearValues = Object.keys(gearMap);
+    let newGear = gearValue;
 
-    if (state === '+') {
-      const currentIndex = Object.keys(gearValues).indexOf(gearValue);
-      if (currentIndex < gearValues.length - 1) {
-        newGear = gearValues[currentIndex + 1] as 'N' | '1' | '2' | '3' | '4' | '5' | '6';
+    if (state === '+' && currentIndex < gearSequence.length - 1) {
+      const nextGearRange = gearRanges[currentIndex + 1];
+      if (nextGearRange.max > maxThrottle) {
+        showSnackbar('Enable Overdrive for higher gears', 'error');
+        return;
       }
-    } else if (state === '-') {
-      const currentIndex = gearValues.indexOf(gearValue);
-      if (currentIndex > 0) {
-        newGear = gearValues[currentIndex - 1] as 'N' | '1' | '2' | '3' | '4' | '5' | '6';
-      }
+      newGear = gearSequence[currentIndex + 1];
+    } else if (state === '-' && currentIndex > 0) {
+      newGear = gearSequence[currentIndex - 1];
     }
 
     const newGearRange = gearRanges.find(range => range.gear === newGear);
     if (newGearRange) {
-      let resp = sendCommand(device, gearMap[newGear]);
-      showSnackbar(`${resp}`, 'success');
-      adjustSpeedSmoothly(newGearRange.max, 2000);
+      const targetSpeed = Math.min(newGearRange.max, maxThrottle);
+      adjustSpeedSmoothly(targetSpeed, 1000);
+      // setGearValue(newGear);
     }
-  }
+  }, [engineOn, gearValue, maxThrottle, adjustSpeedSmoothly, showSnackbar]);
 
-  const showSnackbar = (message, type = 'success') => {
-    setSnackbar({
-      visible: true,
-      message,
-      type
-    });
-  };
-
-  const hideSnackbar = () => {
-    setSnackbar(prev => ({ ...prev, visible: false }));
-  };
+  useEffect(() => {
+    return () => {
+      timeoutsRef.current.forEach(clearTimeout);
+      if (speedIntervalRef.current) {
+        clearInterval(speedIntervalRef.current);
+      }
+    };
+  }, []);
 
   return (
     <ScrollView style={styles.container}>
@@ -182,6 +292,7 @@ export default function HomePage() {
           value={sliderValue}
           setValue={setSliderValue}
           disabled={!engineOn}
+          device={device}
         />
         <EmergencyButton
           device={device}
@@ -218,10 +329,7 @@ export default function HomePage() {
           secondaryColor="#FFFFFF"
           text="Accelerate"
           icon="keyboard-double-arrow-up"
-          onPress={() => {
-            handleSpeed('accelerate')
-            sendCommand(device, 0x02)
-          }}
+          onPress={() => handleSpeed('accelerate')}
           disabled={!engineOn}
         />
         <TouchableButton
@@ -230,11 +338,7 @@ export default function HomePage() {
           secondaryColor="#FFFFFF"
           text="Decelerate"
           icon="keyboard-double-arrow-down"
-          onPress={() => {
-            handleSpeed('decelerate')
-            sendCommand(device, 0x03)
-          }
-          }
+          onPress={() => handleSpeed('decelerate')}
           disabled={!engineOn}
         />
       </View>
@@ -258,7 +362,9 @@ export default function HomePage() {
           text="Calib. ESC"
           icon="replay"
           disabled={!engineOn || sliderValue > 0}
-          onPress={() => { sendCommand(device, 0x01) }}
+          onPress={() => {
+            if (device) sendCommand(device, 0x65);
+          }}
         />
         <TouchableButton
           fontSize={15}
@@ -266,19 +372,18 @@ export default function HomePage() {
           secondaryColor="#FFFFFF"
           text="Overdrive"
           icon="local-fire-department"
-          onPress={() => {
-            setOverdriveOn((prevValue) => !prevValue)
-          }}
+          onPress={() => setOverdriveOn((prevValue) => !prevValue)}
           active={overdriveOn}
           disabled={!engineOn}
         />
-        <Snackbar
-          visible={snackbar.visible}
-          message={snackbar.message}
-          type={snackbar.type}
-          onDismiss={hideSnackbar}
-        />
       </View>
+
+      <Snackbar
+        visible={snackbar.visible}
+        message={snackbar.message}
+        type={snackbar.type}
+        onDismiss={hideSnackbar}
+      />
     </ScrollView>
   );
 }

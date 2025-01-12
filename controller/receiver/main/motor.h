@@ -57,8 +57,32 @@ void recalibrateMotor() {
 }
 
 void setMotorSpeed(int data) {
-  motorSpeed = map(data, 0, 100, minPWM, maxPWM);
+  int targetSpeed = map(data, 0, 100, minPWM, maxPWM);
   
-  Serial.print("Current Speed: ");
-  motor.writeMicroseconds(motorSpeed);
+  Serial.print("Target Speed: ");
+  Serial.println(targetSpeed);
+  
+  int difference = targetSpeed - motorSpeed;
+
+  if (abs(difference) > 50) {
+    int step = (difference > 0) ? 10 : -10;
+    while (motorSpeed != targetSpeed) {
+      motorSpeed += step;
+      
+      if ((step > 0 && motorSpeed > targetSpeed) || (step < 0 && motorSpeed < targetSpeed)) {
+        motorSpeed = targetSpeed;
+      }
+
+      motor.writeMicroseconds(motorSpeed);
+      Serial.print("Current Speed: ");
+      Serial.println(motorSpeed);
+      delay(20);
+      
+    }
+  } else {
+    motorSpeed = targetSpeed;
+    motor.writeMicroseconds(motorSpeed);
+    Serial.print("Current Speed: ");
+    Serial.println(motorSpeed);
+  }
 }

@@ -34,8 +34,7 @@ export function EmergencyButton(props) {
         if (props.sliderValue > 0) {
             console.log(props.sliderValue);
             props.vibrate(800, 'heavy');
-            props.adjustSpeedSmoothly(0, 1500);
-            props.sendCommand(props.device, 0x00);
+            props.adjustSpeedSmoothly(0, 500);
         }
     }
 

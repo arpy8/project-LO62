@@ -29,10 +29,10 @@ interface HeaderProps {
 }
 
 export default function Header({ sliderValue, primaryColor, secondaryColor, manager, isScanning, device, snackbar, setDevice, setIsScanning, vibrate, hideSnackbar, showSnackbar, disabled }: HeaderProps) {
-    useEffect(() => {
-        if (disabled) disconnectDevice();
-    });
-    
+    // useEffect(() => {
+    //     if (disabled) disconnectDevice();
+    // });
+
     const setupBluetooth = async () => {
         if (Platform.OS === "android") {
             if ((ExpoDevice.platformApiLevel ?? -1) < 31) {
@@ -72,6 +72,7 @@ export default function Header({ sliderValue, primaryColor, secondaryColor, mana
             }
 
             console.log('Scanning...');
+            showSnackbar('Scanning for devices...');
 
             manager.startDeviceScan(null, null, (error, scannedDevice) => {
                 if (error) {
@@ -92,9 +93,10 @@ export default function Header({ sliderValue, primaryColor, secondaryColor, mana
                             setDevice(device);
                             vibrate(300, 'soft');
                             console.log('Connected to ESP32');
-                            showSnackbar('Connected to ESP32');
+                            showSnackbar('Connected to ESP32', 'success');
                         })
                         .catch((error) => {
+                            setDevice(null);
                             console.log('Connection error:', error);
                             showSnackbar('Failed to connect to device', 'error');
                         });
@@ -116,6 +118,13 @@ export default function Header({ sliderValue, primaryColor, secondaryColor, mana
                 console.log("Device disconnected successfully");
                 showSnackbar("Device disconnected successfully");
             } catch (error) {
+                //@ts-ignore
+                if (error.includes('is not connected')) {
+                    setDevice(null);
+                    setIsScanning(false);
+                    console.log('Device is not connected');
+                    showSnackbar('Device is not connected', 'error');
+                }
                 console.error("Error disconnecting the device:", error);
                 showSnackbar("Error disconnecting device", "error");
             }
