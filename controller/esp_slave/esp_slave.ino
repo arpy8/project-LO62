@@ -68,7 +68,7 @@ void setup() {
   // Arming sequence
   Serial.println("Arming ESC...");
   motor.writeMicroseconds(minPWM);
-  delay(2000);  // Give ESC time to recognize the arming signal
+  delay(2000);
   Serial.println("ESC armed.");
 }
 

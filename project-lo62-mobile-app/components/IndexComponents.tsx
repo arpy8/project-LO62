@@ -24,7 +24,7 @@ export function TouchableButton(props) {
     });
 
     return (
-        <TouchableOpacity TouchableOpacity style={styles.container} onPress={props.onPress} disabled={props.disabled}>
+        <TouchableOpacity style={styles.container} onPress={props.onPress} disabled={props.disabled}>
             <MaterialIcons name={props.active && props.activeIcon ? props.activeIcon : props.icon} size={24} color={props.disabled ? '#9ca3af' : props.active ? props.secondaryColor : props.primaryColor} />
             {props.text && <Text style={styles.containerText}>{props.active && props.activeText ? props.activeText : props.text}</Text>}
         </TouchableOpacity>

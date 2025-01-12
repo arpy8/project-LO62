@@ -6,7 +6,10 @@ import Throttle from '@/components/Throttle';
 import Header from '@/components/Header';
 import { TouchableButton, GearView } from '@/components/IndexComponents';
 import { EmergencyButton } from '@/components/EmergencyButton';
-
+import { BleManager } from 'react-native-ble-plx';
+import { useVibration } from '@/components/haptics';
+import { sendData, sendCommand } from '@/components/BTutils';
+import { Snackbar } from '@/components/Snackbar';
 
 global.Buffer = Buffer;
 
@@ -18,6 +21,15 @@ export default function HomePage() {
   const [gearValue, setGearValue] = useState<'N' | '1' | '2' | '3' | '4' | '5' | '6'>('N');
   const [currentAction, setCurrentAction] = useState<'accelerate' | 'decelerate' | null>(null);
   const timeoutsRef = useRef<number[]>([]);
+  const [manager] = useState(new BleManager());
+  const [device, setDevice] = useState(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [snackbar, setSnackbar] = useState({
+    visible: false,
+    message: '',
+    type: 'success'
+  });
+  const { vibrate } = useVibration();
 
   const gearRanges = [
     { gear: 'N', min: 0, max: 0, default: 0 },
@@ -73,6 +85,11 @@ export default function HomePage() {
     adjustSpeed(sliderValue);
   }
 
+  function handleEngineChange() {
+    setEngineOn((prevValue) => !prevValue);
+    adjustSpeedSmoothly(0, 3000);
+  }
+
   function adjustSpeedSmoothly(targetValue: number, duration: number) {
     timeoutsRef.current.forEach(clearTimeout);
     timeoutsRef.current = [];
@@ -93,11 +110,21 @@ export default function HomePage() {
   function handleGear(state: '+' | '-') {
     if (!engineOn) return;
 
-    const gearValues = ['N', '1', '2', '3', '4', '5', '6'];
+    const gearMap = {
+      N: 0x04,
+      1: 0x05,
+      2: 0x06,
+      3: 0x07,
+      4: 0x08,
+      5: 0x09,
+      6: 0x10
+    };
+
     let newGear: 'N' | '1' | '2' | '3' | '4' | '5' | '6' = gearValue;
+    let gearValues = Object.keys(gearMap);
 
     if (state === '+') {
-      const currentIndex = gearValues.indexOf(gearValue);
+      const currentIndex = Object.keys(gearValues).indexOf(gearValue);
       if (currentIndex < gearValues.length - 1) {
         newGear = gearValues[currentIndex + 1] as 'N' | '1' | '2' | '3' | '4' | '5' | '6';
       }
@@ -110,23 +137,60 @@ export default function HomePage() {
 
     const newGearRange = gearRanges.find(range => range.gear === newGear);
     if (newGearRange) {
+      let resp = sendCommand(device, gearMap[newGear]);
+      showSnackbar(`${resp}`, 'success');
       adjustSpeedSmoothly(newGearRange.max, 2000);
     }
   }
+
+  const showSnackbar = (message, type = 'success') => {
+    setSnackbar({
+      visible: true,
+      message,
+      type
+    });
+  };
+
+  const hideSnackbar = () => {
+    setSnackbar(prev => ({ ...prev, visible: false }));
+  };
 
   return (
     <ScrollView style={styles.container}>
       <Header
         sliderValue={sliderValue}
-        engineOn={engineOn}
-        disabled={!engineOn}
         primaryColor="#2196f3"
         secondaryColor="#FFF"
+        manager={manager}
+        device={device}
+        isScanning={isScanning}
+        snackbar={snackbar}
+        setDevice={setDevice}
+        setIsScanning={setIsScanning}
+        vibrate={vibrate}
+        showSnackbar={showSnackbar}
+        hideSnackbar={hideSnackbar}
+        disabled={!engineOn}
       />
 
-      <View style={{ ...styles.rowContainer, marginHorizontal: 10, width: '100%' }}>
-        <Throttle value={sliderValue} setValue={setSliderValue} disabled={!engineOn} />
-        <EmergencyButton adjustSpeedSmoothly={adjustSpeedSmoothly} disabled={!engineOn} />
+      <View style={{
+        ...styles.rowContainer,
+        marginHorizontal: 10,
+        width: '100%'
+      }}>
+        <Throttle
+          value={sliderValue}
+          setValue={setSliderValue}
+          disabled={!engineOn}
+        />
+        <EmergencyButton
+          device={device}
+          sendCommand={sendCommand}
+          sliderValue={sliderValue}
+          adjustSpeedSmoothly={adjustSpeedSmoothly}
+          vibrate={vibrate}
+          disabled={!engineOn}
+        />
       </View>
 
       <View style={styles.rowContainer}>
@@ -154,9 +218,11 @@ export default function HomePage() {
           secondaryColor="#FFFFFF"
           text="Accelerate"
           icon="keyboard-double-arrow-up"
-          onPress={() => handleSpeed('accelerate')}
+          onPress={() => {
+            handleSpeed('accelerate')
+            sendCommand(device, 0x02)
+          }}
           disabled={!engineOn}
-        // active={engineOn} 
         />
         <TouchableButton
           fontSize={27}
@@ -164,9 +230,12 @@ export default function HomePage() {
           secondaryColor="#FFFFFF"
           text="Decelerate"
           icon="keyboard-double-arrow-down"
-          onPress={() => handleSpeed('decelerate')}
+          onPress={() => {
+            handleSpeed('decelerate')
+            sendCommand(device, 0x03)
+          }
+          }
           disabled={!engineOn}
-        // active={engineOn}
         />
       </View>
 
@@ -179,7 +248,7 @@ export default function HomePage() {
           activeText="Engine On"
           icon="key-off"
           activeIcon="key"
-          onPress={() => { setEngineOn((prevValue) => !prevValue) }}
+          onPress={handleEngineChange}
           active={engineOn}
         />
         <TouchableButton
@@ -188,8 +257,8 @@ export default function HomePage() {
           secondaryColor="#FFFFFF"
           text="Calib. ESC"
           icon="replay"
-          disabled={!engineOn}
-        // onPress={() => setSliderValue(0)} 
+          disabled={!engineOn || sliderValue > 0}
+          onPress={() => { sendCommand(device, 0x01) }}
         />
         <TouchableButton
           fontSize={15}
@@ -197,9 +266,17 @@ export default function HomePage() {
           secondaryColor="#FFFFFF"
           text="Overdrive"
           icon="local-fire-department"
-          onPress={() => { setOverdriveOn((prevValue) => !prevValue) }}
+          onPress={() => {
+            setOverdriveOn((prevValue) => !prevValue)
+          }}
           active={overdriveOn}
           disabled={!engineOn}
+        />
+        <Snackbar
+          visible={snackbar.visible}
+          message={snackbar.message}
+          type={snackbar.type}
+          onDismiss={hideSnackbar}
         />
       </View>
     </ScrollView>
@@ -219,14 +296,3 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   }
 });
-
-
-// import App from "@/components/Bluetooth";
-
-// export default function HomePage() {
-//   return (
-//     <ScrollView >
-//       <App />
-//     </ScrollView >
-//   );
-// }

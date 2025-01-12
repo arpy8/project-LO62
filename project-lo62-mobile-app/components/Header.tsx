@@ -1,7 +1,6 @@
 import * as ExpoDevice from 'expo-device';
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useState, useEffect } from 'react';
-import { BleManager } from 'react-native-ble-plx';
+import React, { useEffect } from 'react';
 import {
     PermissionsAndroid,
     StyleSheet,
@@ -10,35 +9,30 @@ import {
     View,
     Platform,
 } from 'react-native';
-import { useVibration } from '@/components/haptics';
 import { Snackbar } from '@/components/Snackbar';
+import { BleManager } from 'react-native-ble-plx';
 
-// const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
-// const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+interface HeaderProps {
+    sliderValue: number
+    primaryColor: string
+    secondaryColor: string
+    manager: BleManager
+    isScanning: boolean
+    device: any
+    snackbar: any
+    setDevice: any
+    setIsScanning: any
+    vibrate: any
+    hideSnackbar: any
+    showSnackbar: any
+    disabled: boolean
+}
 
-export default function Header(props) {
-    const [manager] = useState(new BleManager());
-    const [device, setDevice] = useState(null);
-    const [isScanning, setIsScanning] = useState(false);
-    const [snackbar, setSnackbar] = useState({
-        visible: false,
-        message: '',
-        type: 'success'
+export default function Header({ sliderValue, primaryColor, secondaryColor, manager, isScanning, device, snackbar, setDevice, setIsScanning, vibrate, hideSnackbar, showSnackbar, disabled }: HeaderProps) {
+    useEffect(() => {
+        if (disabled) disconnectDevice();
     });
-    const { vibrate } = useVibration();
-
-    const showSnackbar = (message, type = 'success') => {
-        setSnackbar({
-            visible: true,
-            message,
-            type
-        });
-    };
-
-    const hideSnackbar = () => {
-        setSnackbar(prev => ({ ...prev, visible: false }));
-    };
-
+    
     const setupBluetooth = async () => {
         if (Platform.OS === "android") {
             if ((ExpoDevice.platformApiLevel ?? -1) < 31) {
@@ -135,8 +129,8 @@ export default function Header(props) {
         else if (device) await disconnectDevice();
     };
 
-    let currentBGColor = device != null ? props.primaryColor : 'transparent';
-    let currentBorderColor = device != null ? props.primaryColor : props.secondaryColor;
+    let currentBGColor = device != null ? primaryColor : 'transparent';
+    let currentBorderColor = device != null ? primaryColor : secondaryColor;
 
     return (
         <View style={{ backgroundColor: '#1c1c1c' }}>
@@ -145,13 +139,13 @@ export default function Header(props) {
             <View style={styles.headerContainer}>
                 <View style={styles.headerSubContainer}>
                     <Text style={styles.headerTextUpper}>Throttle</Text>
-                    <Text style={styles.headerTextMain}>{props.sliderValue} %</Text>
+                    <Text style={styles.headerTextMain}>{sliderValue} %</Text>
                 </View>
                 <TouchableOpacity
                     style={{ ...styles.headerSubContainer, backgroundColor: currentBGColor, borderColor: currentBorderColor }}
                     onPress={handleBTConnection}
                 >
-                    <MaterialIcons name={device != null ? "bluetooth-connected" : "bluetooth"} size={42} color={props.secondaryColor} style={styles.btIcon} />
+                    <MaterialIcons name={device != null ? "bluetooth-connected" : "bluetooth"} size={42} color={secondaryColor} style={styles.btIcon} />
                 </TouchableOpacity>
             </View>
 

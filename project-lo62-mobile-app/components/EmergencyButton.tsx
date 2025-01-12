@@ -1,11 +1,9 @@
 import { StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Text, View } from '@/components/Themed';
-import { useVibration } from '@/components/haptics';
 
 
 export function EmergencyButton(props) {
-    const { vibrate } = useVibration();
 
     const styles = StyleSheet.create({
         emergencyButton: {
@@ -33,8 +31,12 @@ export function EmergencyButton(props) {
     })
 
     function handlePress() {
-        vibrate(800, 'heavy');
-        props.adjustSpeedSmoothly(0, 800);
+        if (props.sliderValue > 0) {
+            console.log(props.sliderValue);
+            props.vibrate(800, 'heavy');
+            props.adjustSpeedSmoothly(0, 1500);
+            props.sendCommand(props.device, 0x00);
+        }
     }
 
     return (
