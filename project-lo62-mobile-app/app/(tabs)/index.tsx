@@ -92,6 +92,7 @@ export default function HomePage() {
   const [maxThrottle, setMaxThrottle] = useState(60);
   const [engineOn, setEngineOn] = useState(false);
   const [overdriveOn, setOverdriveOn] = useState(false);
+  const [lightOn, setLightOn] = useState(false);
   const [ignoreSendingSignals, setIgnoreSendingSignals] = useState(false);
   const [gearValue, setGearValue] = useState<'N' | '1' | '2' | '3' | '4' | '5' | '6'>('N');
   const [currentAction, setCurrentAction] = useState<'accelerate' | 'decelerate' | null>(null);
@@ -294,8 +295,10 @@ export default function HomePage() {
     <ScrollView style={styles.container}>
       <Header
         sliderValue={sliderValue}
-        primaryColor="#2196f3"
-        secondaryColor="#FFF"
+        primaryColorBT="#2196f3"
+        secondaryColorBT="#FFF"
+        primaryColorLT="#ffa133"
+        secondaryColorLT="#FFF"
         manager={manager}
         device={device}
         isScanning={isScanning}
@@ -305,7 +308,8 @@ export default function HomePage() {
         vibrate={vibrate}
         showSnackbar={showSnackbar}
         hideSnackbar={hideSnackbar}
-        disabled={!engineOn}
+        setLightOn={setLightOn}
+        lightOn={lightOn}
       />
 
       <View style={{
@@ -350,7 +354,7 @@ export default function HomePage() {
 
       <View style={styles.rowContainer}>
         <TouchableButton
-          fontSize={27}
+          fontSize={15}
           primaryColor="#72D82D"
           secondaryColor="#FFFFFF"
           text="Accelerate"
@@ -359,7 +363,16 @@ export default function HomePage() {
           disabled={!engineOn}
         />
         <TouchableButton
-          fontSize={27}
+          fontSize={15}
+          primaryColor="#ffd65a"
+          secondaryColor="#FFFFFF"
+          text="Hold"
+          icon="pause"
+          // onPress={() => handleSpeed('accelerate')}
+          disabled={!engineOn}
+        />
+        <TouchableButton
+          fontSize={15}
           primaryColor="#FA3636"
           secondaryColor="#FFFFFF"
           text="Decelerate"
@@ -383,9 +396,9 @@ export default function HomePage() {
         />
         <TouchableButton
           fontSize={15}
-          primaryColor="#FFFF00"
+          primaryColor="#ffd65a"
           secondaryColor="#FFFFFF"
-          text="Calib. ESC"
+          text="Calibrate"
           icon="replay"
           disabled={!engineOn || sliderValue > 0}
           onPress={() => {

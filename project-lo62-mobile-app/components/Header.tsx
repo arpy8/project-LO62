@@ -1,5 +1,5 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
     StyleSheet,
     TouchableOpacity,
@@ -8,12 +8,17 @@ import {
 } from 'react-native';
 import { Snackbar } from '@/components/Snackbar';
 import { BleManager } from 'react-native-ble-plx';
-import { setupBluetooth } from '@/utils/bluetooth';
+import { sendCommand, setupBluetooth } from '@/utils/bluetooth';
+import { setupAudio, loadSound, playSound, unloadAllSounds } from '@/utils/sound';
 
 interface HeaderProps {
     sliderValue: number
-    primaryColor: string
-    secondaryColor: string
+    primaryColorBT: string
+    secondaryColorBT: string
+    primaryColorLT: string
+    secondaryColorLT: string
+    lightOn: boolean
+    setLightOn: any
     manager: BleManager
     isScanning: boolean
     device: any
@@ -23,24 +28,35 @@ interface HeaderProps {
     vibrate: any
     hideSnackbar: any
     showSnackbar: any
-    disabled: boolean
 }
 
-export default function Header({ sliderValue, primaryColor, secondaryColor, manager, isScanning, device, snackbar, setDevice, setIsScanning, vibrate, hideSnackbar, showSnackbar, disabled }: HeaderProps) {
-    // useEffect(() => {
-    //     if (disabled) disconnectDevice();
-    // });
 
-
+export default function Header({ sliderValue, primaryColorBT, secondaryColorBT, primaryColorLT, secondaryColorLT, manager, isScanning, device, snackbar, setDevice, setIsScanning, vibrate, hideSnackbar, showSnackbar, setLightOn, lightOn }: HeaderProps) {
     useEffect(() => {
+        async function initialize() {
+            await setupAudio();
+            await loadSound('bluetooth', require('../assets/audio/bt.mp3'));
+        }
+
+        initialize();
         setupBluetooth();
 
         return () => {
+            unloadAllSounds();
             if (isScanning) {
                 manager.stopDeviceScan();
             }
         };
     }, []);
+
+    function toggleLight() {
+        if (device) {
+            setLightOn(prev => (!prev));
+            sendCommand(device, lightOn ? 0x69 : 0x6A);
+        } else {
+            showSnackbar('Please connect to the board', 'error');
+        }
+    }
 
     function scanAndConnect(tryCount: number = 3) {
         if (device || isScanning) {
@@ -95,6 +111,7 @@ export default function Header({ sliderValue, primaryColor, secondaryColor, mana
                             setDevice(device);
                             vibrate(300, 'soft');
                             console.log('Connected to ESP32');
+                            playSound('bluetooth');
                             showSnackbar('Connected to ESP32', 'success');
                         })
                         .catch((error) => {
@@ -157,8 +174,11 @@ export default function Header({ sliderValue, primaryColor, secondaryColor, mana
         else if (device) await disconnectDevice();
     };
 
-    let currentBGColor = device != null ? primaryColor : 'transparent';
-    let currentBorderColor = device != null ? primaryColor : secondaryColor;
+    let currentBGColorBT = device != null ? primaryColorBT : 'transparent';
+    let currentBorderColorBT = device != null ? primaryColorBT : secondaryColorBT;
+
+    let currentBGColorLT = lightOn ? primaryColorLT : 'transparent';
+    let currentBorderColorLT = lightOn ? primaryColorLT : secondaryColorLT;
 
     return (
         <View style={{ backgroundColor: '#1c1c1c' }}>
@@ -170,10 +190,16 @@ export default function Header({ sliderValue, primaryColor, secondaryColor, mana
                     <Text style={styles.headerTextMain}>{sliderValue} %</Text>
                 </View>
                 <TouchableOpacity
-                    style={{ ...styles.headerSubContainer, backgroundColor: currentBGColor, borderColor: currentBorderColor }}
+                    style={{ ...styles.headerSubContainer, backgroundColor: currentBGColorBT, borderColor: currentBorderColorBT }}
                     onPress={handleBTConnection}
                 >
-                    <MaterialIcons name={device != null ? "bluetooth-connected" : "bluetooth"} size={42} color={secondaryColor} style={styles.btIcon} />
+                    <MaterialIcons name={device != null ? "bluetooth-connected" : "bluetooth"} size={42} color={secondaryColorBT} style={styles.btIcon} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={{ ...styles.headerSubContainer, backgroundColor: currentBGColorLT, borderColor: currentBorderColorLT }}
+                    onPress={toggleLight}
+                >
+                    <MaterialIcons name={device != null ? "flashlight-on" : "flashlight-on"} size={42} color={secondaryColorLT} style={styles.btIcon} />
                 </TouchableOpacity>
             </View>
 
