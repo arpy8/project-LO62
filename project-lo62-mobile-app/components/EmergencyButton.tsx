@@ -1,9 +1,20 @@
 import { StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Text, View } from '@/components/Themed';
+import { sendCommand } from '@/utils/bluetooth';
 
 
-export function EmergencyButton(props) {
+interface EmergencyButtonProps {
+    sliderValue: number
+    vibrate: any
+    device: any
+    setIgnoreSendingSignals: any
+    adjustSpeedSmoothly: any
+    disabled: boolean
+    signalManager: any
+}
+
+export function EmergencyButton(props: EmergencyButtonProps) {
 
     const styles = StyleSheet.create({
         emergencyButton: {
@@ -30,11 +41,23 @@ export function EmergencyButton(props) {
         },
     })
 
-    function handlePress() {
+    async function handlePress() {
         if (props.sliderValue > 0) {
-            console.log(props.sliderValue);
             props.vibrate(800, 'heavy');
-            props.adjustSpeedSmoothly(0, 500);
+
+            if (props.device) {
+                props.signalManager?.setEmergency(true);
+
+                await sendCommand(props.device, 0x68);
+
+                props.setIgnoreSendingSignals(true);
+                await props.adjustSpeedSmoothly(0, 500);
+
+                setTimeout(() => {
+                    props.signalManager?.setEmergency(false);
+                    props.setIgnoreSendingSignals(false);
+                }, 600);
+            }
         }
     }
 

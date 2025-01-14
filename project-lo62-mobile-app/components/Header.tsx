@@ -1,16 +1,14 @@
-import * as ExpoDevice from 'expo-device';
 import { MaterialIcons } from '@expo/vector-icons';
 import React, { useEffect } from 'react';
 import {
-    PermissionsAndroid,
     StyleSheet,
     TouchableOpacity,
     Text,
-    View,
-    Platform,
+    View
 } from 'react-native';
 import { Snackbar } from '@/components/Snackbar';
 import { BleManager } from 'react-native-ble-plx';
+import { setupBluetooth } from '@/utils/bluetooth';
 
 interface HeaderProps {
     sliderValue: number
@@ -33,23 +31,6 @@ export default function Header({ sliderValue, primaryColor, secondaryColor, mana
     //     if (disabled) disconnectDevice();
     // });
 
-    const setupBluetooth = async () => {
-        if (Platform.OS === "android") {
-            if ((ExpoDevice.platformApiLevel ?? -1) < 31) {
-                const granted = await PermissionsAndroid.request(
-                    PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-                    {
-                        title: "Location Permission",
-                        message: "Bluetooth Low Energy requires Location",
-                        buttonPositive: "OK",
-                    }
-                );
-                return granted === PermissionsAndroid.RESULTS.GRANTED;
-            }
-        } else {
-            return true;
-        }
-    };
 
     useEffect(() => {
         setupBluetooth();
@@ -61,26 +42,47 @@ export default function Header({ sliderValue, primaryColor, secondaryColor, mana
         };
     }, []);
 
-    function scanAndConnect() {
+    function scanAndConnect(tryCount: number = 3) {
+        if (device || isScanning) {
+            console.log('Already connected or scanning in progress');
+            return;
+        }
+
+        if (tryCount <= 0) {
+            console.log('All connection attempts failed');
+            showSnackbar('Failed to connect to device', 'error');
+            return;
+        }
+
         setIsScanning(true);
 
         manager.state().then((state) => {
             if (state !== 'PoweredOn') {
                 console.log('Bluetooth is not powered on');
                 showSnackbar('Bluetooth is not powered on', 'error');
+                setIsScanning(false);
                 return;
             }
 
             console.log('Scanning...');
-            showSnackbar('Scanning for devices...');
+            showSnackbar('Scanning for the board...');
+
+            let scanTimeout: NodeJS.Timeout;
 
             manager.startDeviceScan(null, null, (error, scannedDevice) => {
                 if (error) {
-                    console.log('Scanning error:', error);
+                    if (error.errorCode === 101) {
+                        showSnackbar('Please give bluetooth permissions', 'error');
+                    } else {
+                        console.log('Scanning error:', error);
+                    }
+                    setIsScanning(false);
+                    clearTimeout(scanTimeout);
                     return;
                 }
 
                 if (scannedDevice && scannedDevice.name === 'ESP32_BLE') {
+                    clearTimeout(scanTimeout);
                     manager.stopDeviceScan();
                     setIsScanning(false);
 
@@ -96,16 +98,33 @@ export default function Header({ sliderValue, primaryColor, secondaryColor, mana
                             showSnackbar('Connected to ESP32', 'success');
                         })
                         .catch((error) => {
-                            setDevice(null);
-                            console.log('Connection error:', error);
-                            showSnackbar('Failed to connect to device', 'error');
+                            console.log('Connection error:', error.errorCode, error.message);
+                            // showSnackbar('Failed to connect to device', 'error');
+                            manager.stopDeviceScan();
+                            setIsScanning(false);
+
+                            if (!device) {
+                                setTimeout(() => {
+                                    scanAndConnect(tryCount - 1);
+                                }, 1000);
+                            }
                         });
                 }
             });
 
-            setTimeout(() => {
+            scanTimeout = setTimeout(() => {
                 manager.stopDeviceScan();
                 setIsScanning(false);
+
+                if (!device && tryCount > 1) {
+                    console.log('Retrying connection...');
+                    setTimeout(() => {
+                        scanAndConnect(tryCount - 1);
+                    }, 1000);
+                } else if (!device) {
+                    console.log('Scan timeout, no devices found');
+                    showSnackbar('No devices found during scan', 'error');
+                }
             }, 5000);
         });
     }
@@ -115,21 +134,21 @@ export default function Header({ sliderValue, primaryColor, secondaryColor, mana
             try {
                 await device.cancelConnection();
                 setDevice(null);
-                console.log("Device disconnected successfully");
-                showSnackbar("Device disconnected successfully");
+                console.log("Board disconnected");
+                showSnackbar("Board disconnected");
             } catch (error) {
                 //@ts-ignore
                 if (error.includes('is not connected')) {
                     setDevice(null);
                     setIsScanning(false);
-                    console.log('Device is not connected');
-                    showSnackbar('Device is not connected', 'error');
+                    console.log('Board is not connected');
+                    showSnackbar('Board is not connected', 'error');
                 }
-                console.error("Error disconnecting the device:", error);
-                showSnackbar("Error disconnecting device", "error");
+                console.error("Error disconnecting the board:", error);
+                showSnackbar("Error disconnecting board", "error");
             }
         } else {
-            console.log("No device connected to disconnect");
+            console.log("Board not connected to disconnect");
         }
     };
 

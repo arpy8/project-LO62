@@ -8,10 +8,11 @@ import Header from '@/components/Header';
 import { View } from '@/components/Themed';
 import Throttle from '@/components/Throttle';
 import { Snackbar } from '@/components/Snackbar';
-import { sendCommand } from '@/components/BTutils';
-import { useVibration } from '@/components/haptics';
+import { sendCommand } from '@/utils/bluetooth';
+import { useVibration } from '@/utils/haptics';
 import { EmergencyButton } from '@/components/EmergencyButton';
 import { TouchableButton, GearView } from '@/components/IndexComponents';
+
 
 global.Buffer = Buffer;
 
@@ -22,12 +23,26 @@ class SignalManager {
   private lastSendTime = 0;
   private pendingValue: number | null = null;
   private sendTimeout: NodeJS.Timeout | null = null;
+  private emergency: boolean = false;
 
   constructor(device: any) {
     this.device = device;
   }
 
+  setEmergency(state: boolean) {
+    this.emergency = state;
+    if (state) {
+      if (this.sendTimeout) {
+        clearTimeout(this.sendTimeout);
+        this.sendTimeout = null;
+      }
+      this.pendingValue = null;
+    }
+  }
+
   async send(value: number) {
+    if (this.emergency) return;
+
     this.pendingValue = value;
 
     const now = Date.now();
@@ -55,8 +70,8 @@ class SignalManager {
     if (valueToSend === this.lastValue) return;
 
     try {
-      sendCommand(this.device, valueToSend);
-      sendCommand(this.device, `0x${valueToSend.toString(16).toUpperCase().padStart(2, '0')}`);
+      // sendCommand(this.device, valueToSend);
+      sendCommand(this.device, `0x${valueToSend.toString(16).toUpperCase().padStart(2, '0')}`, this.setDevice);
 
       this.lastValue = valueToSend;
       this.lastSendTime = Date.now();
@@ -77,6 +92,7 @@ export default function HomePage() {
   const [maxThrottle, setMaxThrottle] = useState(60);
   const [engineOn, setEngineOn] = useState(false);
   const [overdriveOn, setOverdriveOn] = useState(false);
+  const [ignoreSendingSignals, setIgnoreSendingSignals] = useState(false);
   const [gearValue, setGearValue] = useState<'N' | '1' | '2' | '3' | '4' | '5' | '6'>('N');
   const [currentAction, setCurrentAction] = useState<'accelerate' | 'decelerate' | null>(null);
   const timeoutsRef = useRef<number[]>([]);
@@ -144,7 +160,7 @@ export default function HomePage() {
   }, [sliderValue, engineOn]);
 
   useEffect(() => {
-    if (device && signalManager.current && engineOn && 0 <= sliderValue && sliderValue <= 100) {
+    if (device && signalManager.current && engineOn && 0 <= sliderValue && sliderValue <= 100 && !ignoreSendingSignals) {
       signalManager.current.send(sliderValue);
     }
   }, [sliderValue, device, engineOn]);
@@ -193,12 +209,22 @@ export default function HomePage() {
     };
   }, [engineOn, currentAction, maxThrottle]);
 
-  const handleEngineChange = useCallback(() => {
+  const handleEngineChange = useCallback(async () => {
     if (engineOn) {
-      adjustSpeedSmoothly(0, 1000);
+      if (device) {
+        signalManager.current?.setEmergency(true);
+
+        sendCommand(device, 0x67, setDevice);
+        setIgnoreSendingSignals(true);
+        adjustSpeedSmoothly(0, 500);
+
+        setTimeout(() => {
+          signalManager.current?.setEmergency(false);
+          setIgnoreSendingSignals(false);
+        }, 600);
+      }
       setMaxThrottle(60);
       setOverdriveOn(false);
-      setGearValue('N');
       setCurrentAction(null);
 
       if (speedIntervalRef.current) {
@@ -207,7 +233,6 @@ export default function HomePage() {
       }
     }
 
-    showSnackbar(`System turned ${engineOn ? "off" : "on"}`, 'success');
     setEngineOn((prevValue) => !prevValue);
   }, [engineOn, showSnackbar]);
 
@@ -296,11 +321,12 @@ export default function HomePage() {
         />
         <EmergencyButton
           device={device}
-          sendCommand={sendCommand}
           sliderValue={sliderValue}
           adjustSpeedSmoothly={adjustSpeedSmoothly}
+          setIgnoreSendingSignals={setIgnoreSendingSignals}
           vibrate={vibrate}
           disabled={!engineOn}
+          signalManager={signalManager.current}
         />
       </View>
 
@@ -363,7 +389,7 @@ export default function HomePage() {
           icon="replay"
           disabled={!engineOn || sliderValue > 0}
           onPress={() => {
-            if (device) sendCommand(device, 0x65);
+            if (device) sendCommand(device, 0x65, setDevice);
           }}
         />
         <TouchableButton
