@@ -12,6 +12,7 @@ import { sendCommand } from '@/utils/bluetooth';
 import { useVibration } from '@/utils/haptics';
 import { EmergencyButton } from '@/components/EmergencyButton';
 import { TouchableButton, GearView } from '@/components/IndexComponents';
+import commandMap from '@/constants/commandMap';
 
 
 global.Buffer = Buffer;
@@ -67,10 +68,9 @@ class SignalManager {
     if (this.pendingValue === null || !this.device) return;
 
     const valueToSend = this.pendingValue;
-    if (valueToSend === this.lastValue) return;
+    if (valueToSend === this.lastValue || valueToSend % 2 != 0) return;
 
     try {
-      // sendCommand(this.device, valueToSend);
       sendCommand(this.device, `0x${valueToSend.toString(16).toUpperCase().padStart(2, '0')}`, this.setDevice);
 
       this.lastValue = valueToSend;
@@ -215,7 +215,7 @@ export default function HomePage() {
       if (device) {
         signalManager.current?.setEmergency(true);
 
-        sendCommand(device, 0x67, setDevice);
+        sendCommand(device, commandMap.ENGINE_OFF, setDevice);
         setIgnoreSendingSignals(true);
         adjustSpeedSmoothly(0, 500);
 
@@ -402,7 +402,7 @@ export default function HomePage() {
           icon="replay"
           disabled={!engineOn || sliderValue > 0}
           onPress={() => {
-            if (device) sendCommand(device, 0x65, setDevice);
+            if (device) sendCommand(device, commandMap.CALIBRATE, setDevice);
           }}
         />
         <TouchableButton

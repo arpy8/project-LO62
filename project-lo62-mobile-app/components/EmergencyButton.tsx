@@ -2,6 +2,7 @@ import { StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Text, View } from '@/components/Themed';
 import { sendCommand } from '@/utils/bluetooth';
+import commandMap from '@/constants/commandMap';
 
 
 interface EmergencyButtonProps {
@@ -48,7 +49,7 @@ export function EmergencyButton(props: EmergencyButtonProps) {
             if (props.device) {
                 props.signalManager?.setEmergency(true);
 
-                await sendCommand(props.device, 0x68);
+                await sendCommand(props.device, commandMap.EMERGENCY);
 
                 props.setIgnoreSendingSignals(true);
                 await props.adjustSpeedSmoothly(0, 500);

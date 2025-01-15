@@ -1,11 +1,14 @@
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEClient.h>
-#define LED_BUILTIN 2
+
+#define LED_BUILTIN 15
+#define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define CHAR_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
 
-static BLEUUID serviceUUID("4fafc201-1fb5-459e-8fcc-c5c9c331914b");
-static BLEUUID charUUID("beb5483e-36e1-4688-b7f5-ea07361b26a8");
+static BLEUUID serviceUUID(SERVICE_UUID);
+static BLEUUID charUUID(CHAR_UUID);
 
 static BLEAddress* pServerAddress;
 static boolean doConnect = false;
@@ -86,5 +89,33 @@ void sendCommand(uint8_t command) {
     // Serial.println(command, HEX);
   } else {
     Serial.println("Not connected to server");
+  }
+}
+
+void setupBluetooth() {
+  BLEDevice::init("ESP32_BLE_Client");
+
+  BLEScan* pBLEScan = BLEDevice::getScan();
+  pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
+  pBLEScan->setInterval(1349);
+  pBLEScan->setWindow(449);
+  pBLEScan->setActiveScan(true);
+
+  while (!doConnect) {
+    Serial.println("Scanning for BLE servers...");
+    pBLEScan->start(5, false);
+
+    if (!doConnect) {
+      Serial.println("Server not found, scanning again...");
+      delay(2000);
+    }
+  }
+
+  if (doConnect) {
+    if (connectToServer()) {
+      Serial.println("Connected to server successfully");
+    } else {
+      Serial.println("Failed to connect to server");
+    }
   }
 }

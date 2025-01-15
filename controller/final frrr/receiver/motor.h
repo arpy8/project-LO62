@@ -16,12 +16,30 @@ volatile bool decelerationInterrupted = false;
 volatile int newTargetSpeed = 0;
 
 
+void calibrateMotor() {
+  Serial.println("Starting ESC recalibration...");
+
+  Serial.println("Sending maximum throttle signal...");
+  motor.writeMicroseconds(maxPWM / 1.5);
+  delay(1000);
+
+  Serial.println("Sending minimum throttle signal...");
+  motor.writeMicroseconds(minPWM / 1.5);
+  delay(1000);
+
+  Serial.println("ESC recalibration complete. Returning to safe throttle.");
+  motor.writeMicroseconds(minPWM);
+  motorSpeed = minPWM;
+}
+
 void decelerate(float baseStep, bool emergency = false) {
+
   decelerationInterrupted = false;
   float currentSpeed = motorSpeed;
-  unsigned long stepDelay = (emergency) ? 5 : 50;
+  unsigned long stepDelay = (emergency) ? 25 : 50;
 
   Serial.println(emergency ? "Emergency Stop in Progress..." : "Starting deceleration...");
+  if (emergency) digitalWrite(LED_BRAKE, HIGH);
 
   while (currentSpeed > minPWM) {
     if (!emergency && decelerationInterrupted) {
@@ -30,11 +48,7 @@ void decelerate(float baseStep, bool emergency = false) {
     }
 
     float step = baseStep;
-    if (emergency) {
-      step = max((double)((currentSpeed - minPWM) * 0.2), (double)baseStep);
-    } else {
-      step = max((double)((currentSpeed - minPWM) * 0.1), (double)baseStep);
-    }
+    step = max((double)((currentSpeed - minPWM) * (emergency ? 0.2 : 0.1)), (double)baseStep);
 
     currentSpeed = max(currentSpeed - step, (float)minPWM);
     motor.writeMicroseconds((int)currentSpeed);
@@ -50,22 +64,7 @@ void decelerate(float baseStep, bool emergency = false) {
   motor.writeMicroseconds(minPWM);
 
   Serial.println(emergency ? "Emergency Stop Complete" : "Deceleration complete");
-}
-
-void recalibrateMotor() {
-  Serial.println(F("Starting ESC recalibration..."));
-
-  Serial.println(F("Sending maximum throttle signal..."));
-  motor.writeMicroseconds(maxPWM);
-  delay(1000);
-
-  Serial.println(F("Sending minimum throttle signal..."));
-  motor.writeMicroseconds(minPWM);
-  delay(1000);
-
-  Serial.println(F("ESC recalibration complete. Returning to safe throttle."));
-  motor.writeMicroseconds(minPWM);
-  motorSpeed = minPWM;
+  if (emergency) digitalWrite(LED_BRAKE, LOW);
 }
 
 void setMotorSpeed(int data) {

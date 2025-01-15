@@ -2,12 +2,6 @@
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
-#include <motor.h>
-
-#define LED_BUILTIN 2
-#define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-
 
 bool deviceConnected = false;
 BLEServer* pServer = NULL;
@@ -21,7 +15,7 @@ void disconnectBLE() {
       pServer->disconnect(pServer->getConnId());
       digitalWrite(LED_BUILTIN, LOW);
     }
-    decelerate(10);
+    decelerate(1);
   }
 }
 
@@ -57,26 +51,25 @@ private:
     const uint8_t* data = (const uint8_t*)value.c_str();
     int len = value.length();
 
-    // 0x65: caliberate esc
-    // 0x66: disconnect bt
-    // 0x67: engine off
-    // 0x68: emergency stop
-    // default: handle speed
-
     if (len == 1) {
       switch (data[0]) {
-        case 0x65:
-          recalibrateMotor();
+        case CALIBRATE:
+          calibrateMotor();
           break;
-        case 0x66:
+        case DISCONNECT:
           disconnectBLE();
           break;
-        case 0x67:
-          decelerate(10);
+        case ENGINE_OFF:
+          decelerate(1);
           break;
-        case 0x68:
-          // emergency
-          decelerate(50, true);
+        case EMERGENCY:
+          decelerate(2, true);
+          break;
+        case LIGHT_ON:
+          digitalWrite(LED_BRAKE, HIGH);
+          break;
+        case LIGHT_OFF:
+          digitalWrite(LED_BRAKE, LOW);
           break;
         default:
           setMotorSpeed(data[0]);
@@ -89,6 +82,7 @@ private:
 void setupBLE() {
   Serial.begin(115200);
 
+  pinMode(LED_BRAKE, OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
 
   setCpuFrequencyMhz(240);

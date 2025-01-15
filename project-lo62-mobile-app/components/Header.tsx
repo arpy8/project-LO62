@@ -10,6 +10,8 @@ import { Snackbar } from '@/components/Snackbar';
 import { BleManager } from 'react-native-ble-plx';
 import { sendCommand, setupBluetooth } from '@/utils/bluetooth';
 import { setupAudio, loadSound, playSound, unloadAllSounds } from '@/utils/sound';
+import commandMap from '@/constants/commandMap';
+
 
 interface HeaderProps {
     sliderValue: number
@@ -52,7 +54,7 @@ export default function Header({ sliderValue, primaryColorBT, secondaryColorBT, 
     function toggleLight() {
         if (device) {
             setLightOn(prev => (!prev));
-            sendCommand(device, lightOn ? 0x69 : 0x6A);
+            sendCommand(device, lightOn ? commandMap.LIGHT_ON : commandMap.LIGHT_OFF);
         } else {
             showSnackbar('Please connect to the board', 'error');
         }
